@@ -1,85 +1,69 @@
 package log
 
 import (
-	"fmt"
-	"log"
+	"io"
 	"os"
+	"runtime/debug"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/pkgerrors"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// Logger represent common interface for logging function
-type Logger interface {
-	Info(args ...interface{})
-	Infof(format string, args ...interface{})
+var once sync.Once
 
-	Debug(args ...interface{})
-	Debugf(format string, args ...interface{})
+var log zerolog.Logger
 
-	Warn(args ...interface{})
-	Warnf(format string, args ...interface{})
+func Get() zerolog.Logger {
+	once.Do(func() {
+		zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
+		zerolog.TimeFieldFormat = time.RFC3339Nano
 
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
+		logLevel, err := strconv.Atoi(os.Getenv("LOG_LEVEL"))
+		if err != nil {
+			logLevel = int(zerolog.InfoLevel) // default to INFO
+		}
 
-	Fatal(args ...interface{})
-	Fatalf(format string, args ...interface{})
-}
+		var output io.Writer = zerolog.ConsoleWriter{
+			Out:        os.Stdout,
+			TimeFormat: time.RFC3339,
+		}
 
-const (
-	ColorReset  = "\033[0m"
-	ColorRed    = "\033[31m"
-	ColorGreen  = "\033[32m"
-	ColorYellow = "\033[33m"
-	ColorBlue   = "\033[34m"
-	ColorPurple = "\033[35m"
-	ColorCyan   = "\033[36m"
-	ColorGray   = "\033[37m"
-	ColorWhite  = "\033[37m"
-)
+		if os.Getenv("APP_ENV") != "development" {
+			fileLogger := &lumberjack.Logger{
+				Filename:   "wikipedia-demo.log",
+				MaxSize:    5, //
+				MaxBackups: 10,
+				MaxAge:     14,
+				Compress:   true,
+			}
 
-type CustomLog struct {
-	Output *os.File
-}
+			output = zerolog.MultiLevelWriter(os.Stderr, fileLogger)
+		}
 
-func NewLogger(output *os.File) Logger {
-	return &CustomLog{output}
-}
+		var gitRevision string
 
-func (l *CustomLog) Info(args ...interface{}) {
-	log.New(l.Output, fmt.Sprint(ColorCyan, "[INFO] ", ColorReset), log.Ldate|log.Ltime|log.Lshortfile).Output(2, fmt.Sprintf("%v", args))
-}
+		buildInfo, ok := debug.ReadBuildInfo()
+		if ok {
+			for _, v := range buildInfo.Settings {
+				if v.Key == "vcs.revision" {
+					gitRevision = v.Value
+					break
+				}
+			}
+		}
 
-func (l *CustomLog) Debug(args ...interface{}) {
-	log.New(l.Output, fmt.Sprint(ColorGray, "[DEBUG] ", ColorReset), log.Ldate|log.Ltime|log.Lshortfile).Output(2, fmt.Sprintf("%v", args))
-}
+		log = zerolog.New(output).
+			Level(zerolog.Level(logLevel)).
+			With().
+			Timestamp().
+			Str("git_revision", gitRevision).
+			Str("go_version", buildInfo.GoVersion).
+			Logger()
+	})
 
-func (l *CustomLog) Warn(args ...interface{}) {
-	log.New(l.Output, fmt.Sprint(ColorYellow, "[WARN] ", ColorReset), log.Ldate|log.Ltime|log.Lshortfile).Output(2, fmt.Sprintf("%v", args))
-}
-
-func (l *CustomLog) Error(args ...interface{}) {
-	log.New(l.Output, fmt.Sprint(ColorRed, "[ERROR] ", ColorReset), log.Ldate|log.Ltime|log.Lshortfile).Output(2, fmt.Sprintf("%v", args))
-}
-
-func (l *CustomLog) Fatal(args ...interface{}) {
-	log.New(l.Output, fmt.Sprint(ColorRed, "[FATAL] ", ColorReset), log.Ldate|log.Ltime|log.Lshortfile).Output(2, fmt.Sprintf("%v", args))
-}
-
-func (l *CustomLog) Infof(format string, args ...interface{}) {
-	log.New(l.Output, fmt.Sprint(ColorCyan, "[INFO] ", ColorReset), log.Ldate|log.Ltime|log.Lshortfile).Output(2, fmt.Sprintf(format, args))
-}
-
-func (l *CustomLog) Debugf(format string, args ...interface{}) {
-	log.New(l.Output, fmt.Sprint(ColorGray, "[DEBUG] ", ColorReset), log.Ldate|log.Ltime|log.Lshortfile).Output(2, fmt.Sprintf(format, args))
-}
-
-func (l *CustomLog) Warnf(format string, args ...interface{}) {
-	log.New(l.Output, fmt.Sprint(ColorYellow, "[WARN] ", ColorReset), log.Ldate|log.Ltime|log.Lshortfile).Output(2, fmt.Sprintf(format, args))
-}
-
-func (l *CustomLog) Errorf(format string, args ...interface{}) {
-	log.New(l.Output, fmt.Sprint(ColorRed, "[ERROR] ", ColorReset), log.Ldate|log.Ltime|log.Lshortfile).Output(2, fmt.Sprintf(format, args))
-}
-
-func (l *CustomLog) Fatalf(format string, args ...interface{}) {
-	log.New(l.Output, fmt.Sprint(ColorRed, "[FATAL] ", ColorReset), log.Ldate|log.Ltime|log.Lshortfile).Output(2, fmt.Sprintf(format, args))
+	return log
 }

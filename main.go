@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"log"
-	"os"
 	"sample-go-server/entity"
 	cH "sample-go-server/module/contract/handler"
 	cRepo "sample-go-server/module/contract/repository"
@@ -111,8 +110,8 @@ func main() {
 
 	gin.SetMode(gin.ReleaseMode)
 	addr := fmt.Sprintf("%s:%d", serverConfig.Host, serverConfig.Port)
-	log := apiLog.NewLogger(os.Stdout)
-	log.Info("Server start at: http://" + addr)
+	log := apiLog.Get()
+	log.Info().Msg("Server start at: http://" + addr)
 	err = app.Run(addr)
 
 	if err != nil {

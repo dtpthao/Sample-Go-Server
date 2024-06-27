@@ -47,10 +47,11 @@ func (s *Service) Post(topic string, msg any) error {
 }
 
 func (s *Service) Listen() {
+	l := log.Get()
 	for {
 		err := s.Consumer.Consume()
 		if err != nil {
-			log.Error(err)
+			l.Err(err)
 		}
 	}
 }

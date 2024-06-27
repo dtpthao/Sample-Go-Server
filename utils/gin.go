@@ -11,7 +11,8 @@ type ErrorResponse struct {
 }
 
 func HandleError(c *gin.Context, status int, err error) {
-	log.Error(err)
+	l := log.Get()
+	l.Err(err)
 	// todo response message should be filtered
 	c.AbortWithStatusJSON(status, ErrorResponse{Message: err.Error()})
 }

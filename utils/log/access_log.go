@@ -7,21 +7,22 @@ import (
 )
 
 func AccessLog(ctx *gin.Context) {
-	globalLog.Infof("Request: %v\n",
-		ctx.ClientIP(),
-		ctx.Request.Method,
-		ctx.Request.URL.Path,
-		ctx.Request.Proto,
-		ctx.Request.UserAgent(),
-		ctx.Request.Header.Get("Content-Type"),
-	)
 	start := time.Now()
+	logger := Get()
+	logger.Info().
+		Str("IP", ctx.ClientIP()).
+		Str("Method", ctx.Request.Method).
+		Str("Path", ctx.Request.URL.Path).
+		Str("Protocol", ctx.Request.Proto).
+		Str("User-Agent", ctx.Request.UserAgent()).
+		Str("Content-Type", ctx.Request.Header.Get("Content-Type")).
+		Msg("REQUEST")
 	ctx.Next()
-	globalLog.Infof("Response: %v\n",
-		ctx.ClientIP(),
-		ctx.Writer.Status(),
-		ctx.Request.URL.Path,
-		time.Since(start).String(),
-		ctx.Writer.Header().Get("Content-Type"),
-	)
+	logger.Info().
+		Str("IP", ctx.ClientIP()).
+		Any("Status", ctx.Writer.Status()).
+		Str("Path", ctx.Request.URL.Path).
+		Dur("Latency", time.Since(start)).
+		Str("Content-type", ctx.Writer.Header().Get("Content-Type")).
+		Msg("RESPONSE")
 }
